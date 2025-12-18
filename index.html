@@ -1,0 +1,257 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Babuş Müzik</title>
+
+<style>
+body {
+    background:#0f0f0f;
+    color:white;
+    font-family:Arial;
+    margin:0;
+    padding:20px;
+}
+
+.player {
+    max-width:420px;
+    margin:auto;
+    background:#1a1a1a;
+    padding:20px;
+    border-radius:18px;
+    text-align:center;
+}
+
+button {
+    padding:10px 14px;
+    margin:5px;
+    border:none;
+    border-radius:8px;
+    cursor:pointer;
+}
+
+button.active {
+    background:#ffd700;
+}
+
+input[type=range] {
+    width:100%;
+}
+
+ul {
+    list-style:none;
+    padding:0;
+    max-height:180px;
+    overflow-y:auto;
+}
+
+li {
+    padding:8px;
+    border-bottom:1px solid #333;
+    cursor:pointer;
+}
+
+li.active {
+    color:#ffd700;
+}
+#eqPanel {
+    position: fixed;
+    top: 0;
+    right: 0;
+    width: 280px;
+    height: 100%;
+    background: #141414;
+    padding: 20px;
+    transform: translateX(100%);
+    transition: transform 0.3s ease;
+    z-index: 9999;
+}
+#eqPanel.open {
+    transform: translateX(0);
+}
+
+#eqPanel h3 {
+    margin-top: 0;
+}
+
+#eqPanel input[type=range] {
+    width: 100%;
+}
+
+</style>
+</head>
+
+<body>
+
+<div class="player">
+<h2>🎵 Babuş Müzik</h2>
+
+<input type="file" id="dosya" multiple accept="audio/*"><br><br>
+
+<button onclick="oynat()">▶</button>
+<button onclick="durdur()">⏸</button>
+<button id="shuffleBtn" onclick="shuffleToggle()">SHF</button>
+<button id="loopBtn" onclick="loopToggle()">LOOP</button>
+<button onclick="eqToggle()">EQ</button>
+
+<div id="zaman">00:00 / 00:00</div>
+<input type="range" id="bar" min="0" value="0" step="0.1">
+
+<br><br>
+
+<label>🔊 Ses</label>
+<input type="range" id="ses" min="0" max="1" step="0.01" value="1">
+
+<hr>
+
+<label>Bass</label>
+<input type="range" min="-30" max="30" value="0" oninput="bass.gain.value=this.value">
+
+<label>Mid</label>
+<input type="range" min="-30" max="30" value="0" oninput="mid.gain.value=this.value">
+
+<label>Treble</label>
+<input type="range" min="-30" max="30" value="0" oninput="treble.gain.value=this.value">
+
+<ul id="playlist"></ul>
+
+<audio id="audio"></audio>
+</div>
+<div id="eqPanel">
+    <h3>Equalizer</h3>
+
+    <label>Bass</label>
+    <input type="range" min="-30" max="30" value="0"
+        oninput="bass.gain.value=this.value">
+
+    <label>Mid</label>
+    <input type="range" min="-30" max="30" value="0"
+        oninput="mid.gain.value=this.value">
+
+    <label>Treble</label>
+    <input type="range" min="-30" max="30" value="0"
+        oninput="treble.gain.value=this.value">
+</div>
+
+<script>
+// ===== TEMEL =====
+const dosya = document.getElementById("dosya");
+const audio = document.getElementById("audio");
+const bar = document.getElementById("bar");
+const zaman = document.getElementById("zaman");
+const ses = document.getElementById("ses");
+const playlistUI = document.getElementById("playlist");
+
+let playlist = [];
+let index = 0;
+let shuffle = false;
+let loop = false;
+
+// ===== PLAYLIST =====
+dosya.addEventListener("change", () => {
+    playlist = Array.from(dosya.files);
+    playlistUI.innerHTML = "";
+    index = 0;
+
+    playlist.forEach((m, i) => {
+        const li = document.createElement("li");
+        li.textContent = m.name;
+        li.onclick = () => cal(i);
+        playlistUI.appendChild(li);
+    });
+
+    cal(0);
+});
+
+function cal(i) {
+    index = i;
+    audio.src = URL.createObjectURL(playlist[index]);
+    audio.play();
+    aktif();
+}
+
+function oynat() {
+    ctx.resume();
+    audio.play();
+}
+
+function durdur() {
+    audio.pause();
+}
+
+// ===== OTOMATİK GEÇİŞ =====
+audio.addEventListener("ended", () => {
+    if (loop) return cal(index);
+
+    if (shuffle) {
+        let r;
+        do { r = Math.floor(Math.random()*playlist.length); }
+        while (r === index && playlist.length > 1);
+        return cal(r);
+    }
+
+    if (index+1 < playlist.length) cal(index+1);
+});
+
+// ===== ZAMAN =====
+audio.addEventListener("loadedmetadata", () => {
+    bar.max = audio.duration;
+});
+
+audio.addEventListener("timeupdate", () => {
+    bar.value = audio.currentTime;
+    zaman.textContent = fmt(audio.currentTime)+" / "+fmt(audio.duration);
+});
+
+bar.oninput = () => audio.currentTime = bar.value;
+ses.oninput = () => audio.volume = ses.value;
+
+function aktif() {
+    [...playlistUI.children].forEach((li,i)=>{
+        li.classList.toggle("active", i===index);
+    });
+}
+
+function fmt(s){
+    if(isNaN(s)) return "00:00";
+    const m=Math.floor(s/60), sn=Math.floor(s%60);
+    return m.toString().padStart(2,"0")+":"+sn.toString().padStart(2,"0");
+}
+
+// ===== SHUFFLE / LOOP =====
+function shuffleToggle(){
+    shuffle=!shuffle;
+    shuffleBtn.classList.toggle("active", shuffle);
+}
+
+function loopToggle(){
+    loop=!loop;
+    loopBtn.classList.toggle("active", loop);
+}
+
+// ===== EQUALIZER (ÇALIŞAN) =====
+const AudioContext = window.AudioContext || window.webkitAudioContext;
+const ctx = new AudioContext();
+const source = ctx.createMediaElementSource(audio);
+
+window.bass = ctx.createBiquadFilter();
+bass.type="lowshelf"; bass.frequency.value=200;
+
+window.mid = ctx.createBiquadFilter();
+mid.type="peaking"; mid.frequency.value=1000; mid.Q.value=1;
+
+window.treble = ctx.createBiquadFilter();
+treble.type="highshelf"; treble.frequency.value=3000;
+
+source.connect(bass).connect(mid).connect(treble).connect(ctx.destination);
+const eqPanel = document.getElementById("eqPanel");
+
+function eqToggle() {
+    eqPanel.classList.toggle("open");
+}
+
+</script>
+
+</body>
+</html>
